@@ -6,12 +6,21 @@ if __name__ == '__main__':
     global node_id 
     global status
     node_id = sys.argv[2]
-    print(f"[LOG] - Iniciando processo {node_id}")
+    print(f"[+][PROCESSO {node_id}] - Iniciando processo {node_id}")
 
     raft = Raft(node_id) # Nó
 
     daemon = Pyro4.Daemon()
-    uri = daemon.register(raft)
 
+    print(f"[+][PROCESSO {node_id}] - Registrando no daemon {node_id}")
+    daemon.register(raft)
     nameserver = Pyro4.locateNS()
-    nameserver.register(node_id, uri)
+    uri = nameserver.lookup("raft_node")
+
+    print(f"[+][PROCESSO {node_id}] - Registrando no servidor de DNS {node_id}")
+    
+
+    nameserver.register(f"raft_node_{node_id}", uri)
+
+    raft.start()
+    daemon.requestLoop()
