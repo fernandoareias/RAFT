@@ -2,7 +2,7 @@
 
 import unittest
 from src.libs.raft import Raft
-from src.libs.core import RaftStatus
+from src.libs.log import RaftStatus
 
 class TestRaft(unittest.TestCase):
 
