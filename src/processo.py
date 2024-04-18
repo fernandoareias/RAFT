@@ -17,9 +17,9 @@ if __name__ == '__main__':
 
     print(f"[+][PROCESSO {raft.node_id}][{raft.state.name}] - Registrando no daemon")
     uri = daemon.register(raft)
-
-    print(f"[+][PROCESSO {raft.node_id}][{raft.state.name}] - Registrando no servidor de DNS")
-    ns.register(raft.node_name, uri)
-
     raft.start(uri)
+
+    print(f"[+][PROCESSO {raft.node_id}][{raft.state.name}] - Registrando no servidor de DNS com nome {raft.node_name} e uri {raft.node_uri}")
+    ns.register(raft.node_name, raft.node_uri)
+
     daemon.requestLoop()

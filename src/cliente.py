@@ -1,8 +1,7 @@
-
-
-import sys
 import Pyro4
 import random
+import sys
+import datetime
 
 def search_nodes() -> dict:
     node_dict = {}
@@ -21,20 +20,22 @@ def search_nodes() -> dict:
 
 
 if __name__ == '__main__': 
-    print("[+] Iniciando cliente...")
+    print(f"[+][{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}][CLIENTE] - Iniciando cliente...")
+    x = 1
+    while x <= 5:
+        try:
+            nodes = search_nodes()
 
-    try:
-        nodes = search_nodes()
+            print(f"[+][{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}][CLIENTE] - Encontrou {len(nodes)} nós")
+            uris = list(nodes.values())
 
-        print(f"Encontrou {len(nodes)} nós")
-        uris = list(nodes.values())
+            random_uri = random.choice(uris)
 
-        random_uri = random.choice(uris)
-
-        print(f"Vai se conectar com o nó {random_uri}")
-
-        node_proxy = Pyro4.Proxy(random_uri)
-        response = node_proxy.send_command("COMANDO: EXECUTAR XPTO")
-        print(response)
-    except Exception as e:
-        print("Erro ao enviar comando:", e)
+            print(f"[+][{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}][CLIENTE] - Vai se conectar com o nó {random_uri}")
+            comando = sys.argv[1]
+            node_proxy = Pyro4.Proxy(random_uri)
+            node_proxy.send_command(f"COMANDO: {comando} {x}")
+            print(f"[+][{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}][CLIENTE] - Comando processado com sucesso")
+        except Exception as e:
+            print(f"[-][{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}][CLIENTE] - Falha no envio do comando, cluster nao possui lider definido no momento, tente novamente em alguns minutos")
+        x += 1
