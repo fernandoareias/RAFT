@@ -34,7 +34,6 @@ class Raft:
     
     __logManager = None
 
-    #Inicializacao
     def __init__(self, node_id, logManager) -> None:
         self.node_id = node_id
         self.node_name = f"node_raft_{node_id}" 
@@ -48,14 +47,12 @@ class Raft:
 
     def has_elapsed_leader_ping_time(self, seconds) -> bool:
         if self.last_leader_ping_time is None:
-            # Se nunca foi pingado pelo líder, então é seguro votar
             return True
         current_time = time.time()
         elapsed_time = current_time - self.last_leader_ping_time
         return elapsed_time >= seconds
     
 
-    # Metodo para o cliente enviar o comando
     @Pyro4.expose
     def send_command(self, command) -> None:
         if(self.state != RaftStatus.LEADER):
@@ -76,7 +73,7 @@ class Raft:
 
     @Pyro4.expose
     def concensus_module_receive_command(self, command):
-        print(f"[+][{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}][PROCESSO {self.node_id}][{self.state.name}][TERMO {self.current_term}][LOG INDEX - {self.__logManager.log_index}] - Solicitacao de execucao de command recebida")
+        print(f"[+][{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}][PROCESSO {self.node_id}][{self.state.name}][TERMO {self.current_term}][LOG INDEX - {self.__logManager.log_index}] - Solicitacao de execucao de comando recebida")
 
         if(self.state != RaftStatus.LEADER):
             return
@@ -85,10 +82,8 @@ class Raft:
 
         current_index = self.__logManager.write(command_content, self.__logManager.log_index)
 
-        # fase 1, escrita no arquivo de log
         self.send_write_command_log_to_followers(command_content, current_index, "ENVIO")
 
-        # fase 2, commit no arquivo de log
         self.send_commit_command_log_to_followers(current_index, "ENVIO")
 
         self.__logManager.committed(current_index)
@@ -100,12 +95,11 @@ class Raft:
         
         self.nodes = self.search_nodes()
 
-        print(f"[+][{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}][PROCESSO {self.node_id}][{self.state.name}][TERMO {self.current_term}][LOG INDEX - {self.__logManager.log_index}][{origem}] - Solicitando a escrita do log do command '{command_content}' de index {log_index}")
+        print(f"[+][{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}][PROCESSO {self.node_id}][{self.state.name}][TERMO {self.current_term}][LOG INDEX - {self.__logManager.log_index}][{origem}] - Solicitando a escrita do log do comando '{command_content}' de index {log_index}")
 
         write_erros = 0
         invalid_index_erro = False
         for node_name, node in self.nodes.items(): 
-            # Envia solicitação de voto para cada nó
             try:
                 node_proxy = Pyro4.Proxy(node)
                 response = node_proxy.request_write_command_log(log_index, command_content)
@@ -127,7 +121,7 @@ class Raft:
             return
 
         if write_erros > len(self.nodes) // 2:
-            print(f"[+][{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}][PROCESSO {self.node_id}][{self.state.name}][TERMO {self.current_term}][LOG INDEX - {self.__logManager.log_index}][{origem}] - Falha na escrita de log do command '{command_content}' de index {log_index}")
+            print(f"[+][{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}][PROCESSO {self.node_id}][{self.state.name}][TERMO {self.current_term}][LOG INDEX - {self.__logManager.log_index}][{origem}] - Falha na escrita de log do comando '{command_content}' de index {log_index}")
             self.send_cancel_commit(log_index)
             raise Exception("Mais de 50% dos nós encontraram erros ao escrever a alteração")
         
@@ -138,16 +132,10 @@ class Raft:
 
         if(len(self.nodes) == 0 and self.state == RaftStatus.LEADER):
             return 
-        # if(len(self.nodes) == 0 and self.state == RaftStatus.LEADER):
-        #     response = self.request_commit_command_log(index, origem)
-        #     if response != "commited":
-        #         raise Exception("Nao foi possivel commitar o command")
-        #     return 
         
         print(f"[+][{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}][PROCESSO {self.node_id}][{self.state.name}][TERMO {self.current_term}][LOG INDEX - {self.__logManager.log_index}][{origem}] - Solicitando commit do log de index {index}")
         write_erros = 0
         for node_name, node in self.nodes.items(): 
-            # Envia solicitação de voto para cada nó
             try:
                 node_proxy = Pyro4.Proxy(node)
                 response = node_proxy.request_commit_command_log(index, origem)  
@@ -182,7 +170,6 @@ class Raft:
 
                 current_index += 1
             except Exception as e:
-                #current_index -= 1
                 print(f"[-][{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}][PROCESSO {self.node_id}][{self.state.name}][TERMO {self.current_term}][LOG INDEX - {self.__logManager.log_index}][REENVIO] - Erro no reenvio dos comando | log index {current_index}, comando {command} |  ex {e}")
 
         
@@ -192,7 +179,7 @@ class Raft:
         if(len(self.nodes) == 0 and self.state == RaftStatus.LEADER):
             response = self.request_cancel_commit(log_index)
             if response != "commited_cancel":
-                raise Exception(f"Nao foi possivel cancelar o commit do command no index {log_index}")
+                raise Exception(f"Nao foi possivel cancelar o commit do comando no index {log_index}")
             return 
         
         print(f"[+][{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}][PROCESSO {self.node_id}][{self.state.name}][TERMO {self.current_term}][LOG INDEX - {self.__logManager.log_index}] - Solicitando cancelamento do commit do log de index {log_index}")
@@ -202,7 +189,6 @@ class Raft:
                 node_proxy = Pyro4.Proxy(node)
                 response = node_proxy.request_cancel_commit(log_index)  
                 if response != "commited_cancel":
-                    #write_erros += 1
                     cancel_commit_erros += 1
 
             except Exception as e:
@@ -210,7 +196,7 @@ class Raft:
                 print(f"[+][{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}][PROCESSO {self.node_id}][{self.state.name}][TERMO {self.current_term}][LOG INDEX - {self.__logManager.log_index}] - Erro no commit, ex {e}")
         
         if cancel_commit_erros > 0:
-            raise Exception(f"Nao foi possivel cancelar o commit do command no index {log_index}, quantidade de erros {cancel_commit_erros}")
+            raise Exception(f"Nao foi possivel cancelar o commit do comando no index {log_index}, quantidade de erros {cancel_commit_erros}")
 
     @Pyro4.expose
     def request_cancel_commit(self, log_index):
@@ -224,7 +210,7 @@ class Raft:
 
     @Pyro4.expose
     def request_write_command_log(self, current_index, command):
-        #print(f"[+][{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}][PROCESSO {self.node_id}][{self.state.name}][TERMO {self.current_term}][LOG INDEX - {self.__logManager.log_index}] - Recebeu solicitacao de escrita do log de index {current_index}, index atual LOG INDEX - {self.__logManager.log_index}, comando {command}")
+        print(f"[+][{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}][PROCESSO {self.node_id}][{self.state.name}][TERMO {self.current_term}][LOG INDEX - {self.__logManager.log_index}] - Recebeu solicitacao de escrita do log de index {current_index}, index atual LOG INDEX - {self.__logManager.log_index}, comando {command}")
         if self.__logManager.log_index < current_index - 1:
             return ("invalid_index", self.__logManager.log_index)
         try:
@@ -237,7 +223,7 @@ class Raft:
     @Pyro4.expose
     def request_commit_command_log(self, log_index, origem):
         try:
-            print(f"[+][{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}][PROCESSO {self.node_id}][{self.state.name}][TERMO {self.current_term}][LOG INDEX - {self.__logManager.log_index}][{origem}] - Solicitacao de commit de command recebida, index {log_index}")
+            print(f"[+][{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}][PROCESSO {self.node_id}][{self.state.name}][TERMO {self.current_term}][LOG INDEX - {self.__logManager.log_index}][{origem}] - Solicitacao de commit de comando recebida, index {log_index}")
             self.__logManager.committed(log_index)
             return "commited"
         except Exception as e:
@@ -260,9 +246,8 @@ class Raft:
         if term > self.current_term:
             self.current_term = term
             self.state = RaftStatus.FOLLOWER
-            self.voted_for = None  # Resetar voto para este termo
+            self.voted_for = None  
         if (self.voted_for is None or self.voted_for == candidate_id) and term == self.current_term and candidate_log_index >= self.__logManager.log_index:
-            # Conceder voto se não votou ainda neste termo e se candidato está no mesmo termo
             self.voted_for = candidate_id
             response["vote_granted"] = True
 
@@ -285,22 +270,20 @@ class Raft:
             
             self.nodes = self.search_nodes()
 
-            #print(f"[+][{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}][PROCESSO {self.node_id}][{self.state.name}][TERMO {self.current_term}][LOG INDEX - {self.__logManager.log_index}] - Encontrou {len(self.nodes.items())} nós para heart beat.")
+            print(f"[+][{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}][PROCESSO {self.node_id}][{self.state.name}][TERMO {self.current_term}][LOG INDEX - {self.__logManager.log_index}] - Encontrou {len(self.nodes.items())} nós para heart beat.")
             if not self.nodes:
                 return
             
             threads = []
-            # Cria uma thread para cada nó na lista de nós
             for node_name, node_uri in self.nodes.items():
                 thread = threading.Thread(target=self.send_heartbeat_to_node, args=(node_name, node_uri))
                 threads.append(thread)
                 thread.start()
 
-            # Aguarda todas as threads terminarem
             for thread in threads:
                 thread.join()
 
-            #print(f"[+][{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}][PROCESSO {self.node_id}][{self.state.name}][TERMO {self.current_term}][LOG INDEX - {self.__logManager.log_index}] - Heartbeat broadcast concluído.")
+            print(f"[+][{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}][PROCESSO {self.node_id}][{self.state.name}][TERMO {self.current_term}][LOG INDEX - {self.__logManager.log_index}] - Heartbeat broadcast concluído.")
         except Exception as e:
             print(f"[-][{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}][PROCESSO {self.node_id}][{self.state.name}][TERMO {self.current_term}][LOG INDEX - {self.__logManager.log_index}] - Erro no broadcast de heartbeat: {e}")
         finally:
@@ -309,9 +292,7 @@ class Raft:
 
     def send_heartbeat_to_node(self, node_name, node_uri):
         try:
-            # Conecta-se ao nó remoto usando Pyro4.Proxy
             node_proxy = Pyro4.Proxy(node_uri)
-            # Envia a mensagem de heartbeat para o nó remoto
             response = node_proxy.receive_heartbeat(self.node_id, self.node_uri, self.current_term, self.__logManager.log_index)
 
             if(response == "invalid_leader"):
@@ -324,7 +305,7 @@ class Raft:
 
     @Pyro4.expose
     def receive_heartbeat(self, node_leader_id, node_leader_uri, leader_term, leader_log_index) -> str:
-        #print(f"[+][{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}][PROCESSO {self.node_id}][{self.state.name}][TERMO {self.current_term}][LOG INDEX - {self.__logManager.log_index}] - Heart beat recebido, lider {node_leader_id}, termo do lider {leader_term}, log index do lider {leader_log_index}")
+        print(f"[+][{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}][PROCESSO {self.node_id}][{self.state.name}][TERMO {self.current_term}][LOG INDEX - {self.__logManager.log_index}] - Heart beat recebido, lider {node_leader_id}, termo do lider {leader_term}, log index do lider {leader_log_index}")
 
         if self.state == RaftStatus.LEADER and node_leader_id != self.node_id and self.current_term > leader_term:
             self.election_timer.cancel()
@@ -356,7 +337,7 @@ class Raft:
             self.state = RaftStatus.FOLLOWER
 
         timeout = random.randint(150, 300) / 100
-        #print(f"[+][{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}][PROCESSO {self.node_id}][{self.state.name}][TERMO {self.current_term}][LOG INDEX - {self.__logManager.log_index}] - Iniciando a proxima eleicao em {timeout}ms ...")
+        print(f"[+][{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}][PROCESSO {self.node_id}][{self.state.name}][TERMO {self.current_term}][LOG INDEX - {self.__logManager.log_index}] - Iniciando a proxima eleicao em {timeout}ms ...")
         self.election_timer = threading.Timer(timeout, self.start_election)
         self.election_timer.start()
 
@@ -370,15 +351,12 @@ class Raft:
         print(f"[+][{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}][PROCESSO {self.node_id}][{self.state.name}][TERMO {self.current_term}][LOG INDEX - {self.__logManager.log_index}][TERMO {self.current_term}] - Termo atual {self.current_term}")
 
         self.voted_for = self.node_id
-        self.votes_received = 1  # Votar em si mesmo
+        self.votes_received = 1  
 
-        # Envia a solicitacao de votos para todos os nos
         self.send_request_vote()
 
-        # Realiza a contagem dos votos e atualiza o status
         self.handle_vote_response()
 
-        # Reinicia o temporizador para aguardar respostas dos votos
         if(self.state != RaftStatus.LEADER):
             self.start_election_timer()
             
@@ -386,9 +364,8 @@ class Raft:
 
     def handle_vote_response(self):
         if self.state != RaftStatus.CANDIDATE:
-            return  # Este nó não é candidato
+            return  
 
-        # Verifica se recebeu votos suficientes para se tornar líder
         if self.votes_received > len(self.nodes) / 2 :
             print(f"[+][{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}][PROCESSO {self.node_id}][{self.state.name}][TERMO {self.current_term}][LOG INDEX - {self.__logManager.log_index}] - Votos suficientes recebidos. Tornando-se líder...")
             self.state = RaftStatus.LEADER
@@ -399,18 +376,16 @@ class Raft:
             print(f"[+][{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}][PROCESSO {self.node_id}][{self.state.name}][TERMO {self.current_term}][LOG INDEX - {self.__logManager.log_index}] - Votos insuficientes recebidos. Continuando como candidato...")
         
 
-    # Envia a solicitacao de voto para o outro nó
     def send_request_vote(self):
         self.nodes = self.search_nodes()
         print(f"[+][{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}][PROCESSO {self.node_id}][{self.state.name}][TERMO {self.current_term}][LOG INDEX - {self.__logManager.log_index}] - Quantidade de nos encontrados {len(self.nodes)}")
 
         for node_name, node in self.nodes.items(): 
-            # Envia solicitação de voto para cada nó
             try:
                 node_proxy = Pyro4.Proxy(node)
                 response = node_proxy.request_vote(self.current_term, self.node_id, self.__logManager.log_index)
                 if response["vote_granted"]:
-                    self.votes_received += 1  # Incrementa votos recebidos
+                    self.votes_received += 1  
             except Exception as e:
                 ...
 
