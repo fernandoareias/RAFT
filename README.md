@@ -1,10 +1,10 @@
 # RAFT using Pyro4
 
-## Rodando servidor de DNS
+## DNS
 
 python3 -m Pyro4.naming
 
-### Iniciando os nós
+### Starting process
 
 python3 src/processo.py --processo 1
 python3 src/processo.py --processo 2
